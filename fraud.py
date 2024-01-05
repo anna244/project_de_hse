@@ -89,7 +89,6 @@ tmp_3 = """
 		INNER JOIN public.anni_dwh_dim_cards_hist cards
 		ON tr.card_num = cards.card_num
 		AND tr.trans_date between cards.effective_from AND cards.effective_to
-		AND tr.oper_type = 'WITHDRAW'
 		AND cards.deleted_flag = 0
 		
 		INNER JOIN public.anni_dwh_dim_accounts_hist accounts
