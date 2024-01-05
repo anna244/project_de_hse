@@ -89,6 +89,7 @@ tmp_3 = """
 		INNER JOIN public.anni_dwh_dim_cards_hist cards
 		ON tr.card_num = cards.card_num
 		AND tr.trans_date between cards.effective_from AND cards.effective_to
+		AND tr.oper_type = 'WITHDRAW'
 		AND cards.deleted_flag = 0
 		
 		INNER JOIN public.anni_dwh_dim_accounts_hist accounts
@@ -132,15 +133,22 @@ tmp_4 = """
 			clients.phone as phone,
 			4 as event_type,
 			now() :: date as report_dt,
-			tr.trans_date - LAG(tr.trans_date,3) OVER (PARTITION BY tr.card_num order by tr.trans_date asc ) as dif_time_lag3,
+			tr.trans_date - LAG(tr.trans_date,3) OVER w as dif_time_lag3,
+
 			tr.amt as amt,
-			LAG(tr.amt,1) OVER (PARTITION BY tr.card_num order by tr.trans_date asc ) as dif_amt_lag1,
-			LAG(tr.amt,2) OVER (PARTITION BY tr.card_num order by tr.trans_date asc ) as dif_amt_lag2,
-			LAG(tr.amt,3) OVER (PARTITION BY tr.card_num order by tr.trans_date asc ) as dif_amt_lag3,
+			LAG(tr.amt, 1) OVER w as dif_amt_lag1,
+			LAG(tr.amt, 2) OVER w as dif_amt_lag2,
+			LAG(tr.amt, 3) OVER w as dif_amt_lag3,
+			
 			tr.oper_result as oper_result,
-			LAG(tr.oper_result,1) OVER (PARTITION BY tr.card_num order by tr.trans_date asc ) as dif_oper_result_lag1,
-			LAG(tr.oper_result,2) OVER (PARTITION BY tr.card_num order by tr.trans_date asc ) as dif_oper_result_lag2,
-			LAG(tr.oper_result,3) OVER (PARTITION BY tr.card_num order by tr.trans_date asc ) as dif_oper_result_lag3
+			LAG(tr.oper_result, 1) OVER w as dif_oper_result_lag1,
+			LAG(tr.oper_result, 2) OVER w as dif_oper_result_lag2,
+			LAG(tr.oper_result, 3) OVER w as dif_oper_result_lag3,
+
+			tr.oper_type as oper_type,
+			LAG(tr.oper_type, 1) OVER w as dif_oper_type_lag1,
+			LAG(tr.oper_type, 2) OVER w as dif_oper_type_lag2,
+			LAG(tr.oper_type, 3) OVER w as dif_oper_type_lag3
 		FROM public.anni_dwh_fact_transactions tr
 		
 		INNER JOIN public.anni_dwh_dim_cards_hist cards
@@ -162,6 +170,8 @@ tmp_4 = """
 		ON tr.terminal = terminals.terminal_id
 		AND tr.trans_date BETWEEN terminals.effective_from AND terminals.effective_to
 		and terminals.deleted_flag = 0
+
+		WINDOW w AS (PARTITION BY tr.card_num order by tr.trans_date asc)
 	)
 
 	select 	
@@ -172,14 +182,23 @@ tmp_4 = """
 		event_type,
 		report_dt
 	from tmp_4 
-		where tmp_4.dif_time_lag3 is not null and tmp_4.dif_time_lag3 <= interval '20 MINUTE'
-		
-			and tmp_4.amt < tmp_4.dif_amt_lag1 and tmp_4.dif_amt_lag1 < tmp_4.dif_amt_lag2 
-			and tmp_4.dif_amt_lag2 < tmp_4.dif_amt_lag3
-			
-			and tmp_4.oper_result = 'SUCCESS' and tmp_4.dif_oper_result_lag1 = 'REJECT' 
-			and tmp_4.dif_oper_result_lag2 = 'REJECT' and tmp_4.dif_oper_result_lag3 = 'REJECT'
-			
+	where
+	  	tmp_4.dif_time_lag3 is not null and tmp_4.dif_time_lag3 <= interval '20 MINUTE'
+
+		and tmp_4.amt < tmp_4.dif_amt_lag1 
+		and tmp_4.dif_amt_lag1 < tmp_4.dif_amt_lag2 
+		and tmp_4.dif_amt_lag2 < tmp_4.dif_amt_lag3
+
+		and tmp_4.oper_result = 'SUCCESS' 
+		and tmp_4.dif_oper_result_lag1 = 'REJECT' 
+		and tmp_4.dif_oper_result_lag2 = 'REJECT' 
+		and tmp_4.dif_oper_result_lag3 = 'REJECT'
+
+		and tmp_4.oper_type = 'WITHDRAW' 
+		and tmp_4.dif_oper_type_lag1 = 'WITHDRAW' 
+		and tmp_4.dif_oper_type_lag2 = 'WITHDRAW' 
+		and tmp_4.dif_oper_type_lag3 = 'WITHDRAW'
+
 	order by tmp_4.card, tmp_4.event_dt asc
 """
 
