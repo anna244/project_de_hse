@@ -75,15 +75,18 @@ tmp_3 = """
 	WITH tmp_3 AS (
 		SELECT 
 			tr.trans_date as event_dt,
-			tr.card_num as card,
 			clients.passport_num as passport,
-			CONCAT(last_name,' ', first_name,' ', patronymic) as fio,
+			CONCAT(last_name, ' ', first_name, ' ', patronymic) as fio,
 			clients.phone as phone,
 			3 as event_type,
 			now() :: date as report_dt,
-			tr.trans_date - LAG(tr.trans_date,1) OVER (PARTITION BY tr.card_num order by tr.trans_date asc ) as dif_time,
+			tr.trans_date - LAG(tr.trans_date, 1) OVER w as dif_time,
+
 			terminals.terminal_city as city,
-			LAG(terminals.terminal_city,1) OVER (PARTITION BY tr.card_num order by tr.trans_date asc) prev_city
+			LAG(terminals.terminal_city, 1) OVER w prev_city,
+
+			tr.card_num as card,
+			LAG(tr.card_num, 1) OVER w prev_card
 		FROM public.anni_dwh_fact_transactions tr
 		
 		INNER JOIN public.anni_dwh_dim_cards_hist cards
@@ -105,6 +108,8 @@ tmp_3 = """
 		ON tr.terminal = terminals.terminal_id
 		AND tr.trans_date BETWEEN terminals.effective_from AND terminals.effective_to
 		and terminals.deleted_flag = 0
+
+		WINDOW w AS (PARTITION BY tr.card_num order by tr.trans_date asc)
 	)
 
 	SELECT 
@@ -115,8 +120,11 @@ tmp_3 = """
 		event_type,
 		report_dt
 	from tmp_3 
-	where tmp_3.dif_time is not null and tmp_3.dif_time <= interval '1 hour'
+	where 
+		tmp_3.dif_time is not null 
+		and tmp_3.dif_time <= interval '1 hour'
 		and tmp_3.prev_city <> city
+		and tmp_3.card = tmp_3.prev_card
 	order by tmp_3.card, tmp_3.event_dt asc
 """
 
